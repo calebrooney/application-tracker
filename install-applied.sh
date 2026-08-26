@@ -32,7 +32,10 @@ fi
 PDF_SERVICES="$HOME/Library/PDF Services"
 mkdir -p "$PDF_SERVICES"
 chmod +x "$ROOT/mac/copy-pdf-to-clipboard"
-ln -sf "$ROOT/mac/copy-pdf-to-clipboard" "$PDF_SERVICES/Copy PDF to Clipboard"
+# Copy (not symlink) — some macOS versions reject symlinks in PDF Services.
+rm -f "$PDF_SERVICES/Copy PDF to Clipboard"
+cp -f "$ROOT/mac/copy-pdf-to-clipboard" "$PDF_SERVICES/Copy PDF to Clipboard"
+chmod +x "$PDF_SERVICES/Copy PDF to Clipboard"
 echo "Installed Print menu item: PDF → Copy PDF to Clipboard"
 
 echo "Installed. Open a new terminal tab (or source ~/.zshrc), then run: applied"

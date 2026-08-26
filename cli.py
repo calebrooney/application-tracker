@@ -4,8 +4,12 @@ Run via `applied` (or `python cli.py`). No browser.
 """
 
 import os
+import select
 import shutil
 import subprocess
+import sys
+import termios
+import tty
 from datetime import date, datetime
 from urllib.parse import unquote, urlparse
 
@@ -17,41 +21,171 @@ UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
+def _get_key():
+    """Read a single keypress or escape sequence without requiring Enter."""
+    if not sys.stdin.isatty():
+        return sys.stdin.read(1)
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd)
+        ch = sys.stdin.read(1)
+        # Capture multi-byte escape sequences (e.g. arrow keys, delete).
+        if ch == "\x1b":
+            r, _, _ = select.select([sys.stdin], [], [], 0.05)
+            if r:
+                ch += sys.stdin.read(2)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+    return ch
+
+
 def ask_text(label, default=None):
-    """Prompt for text: Enter keeps default, `-` clears, anything else replaces."""
-    hint = f" [{default}]" if default else ""
-    value = input(f"{label}{hint}: ").strip()
-    if value == "-":
-        return None
-    if value:
-        return value
-    return default
+    """Prompt for text: Enter accepts default, x rejects/clears, Delete edits manually."""
+    if default is None:
+        value = input(f"{label}: ").strip()
+        return value or None
+
+    prompt = f"{label} [{default}]: "
+    sys.stdout.write(prompt)
+    sys.stdout.flush()
+
+    if not sys.stdin.isatty():
+        raw = input().strip()
+        if raw in ("x", "X", "-"):
+            return None
+        return raw or default
+
+    while True:
+        ch = _get_key()
+        if ch == "\x03":  # Ctrl+C
+            raise KeyboardInterrupt
+        if ch in ("\r", "\n"):  # Enter: accept inferred
+            sys.stdout.write(f"\n")
+            sys.stdout.flush()
+            return default
+        if ch in ("x", "X"):  # x: reject / clear and skip
+            sys.stdout.write("(cleared)\n")
+            sys.stdout.flush()
+            return None
+        if ch in ("\x7f", "\x08", "\x1b[3~", "-"):  # Delete/Backspace: manual entry
+            sys.stdout.write(f"\r\033[K{label}: ")
+            sys.stdout.flush()
+            val = input().strip()
+            return val or None
+        if ch.isprintable():  # Direct typing: start manual entry with typed char
+            sys.stdout.write(f"\r\033[K{label}: {ch}")
+            sys.stdout.flush()
+            rest = input()
+            val = (ch + rest).strip()
+            return val or None
 
 
 def ask_choice(label, options, default=None):
-    """Numbered menu: Enter keeps default, `-` clears, number picks."""
+    """Numbered menu: number is instant command, Enter keeps default (*), x clears."""
     print(f"\n{label}:")
     for i, opt in enumerate(options, start=1):
         mark = " *" if opt == default else ""
         print(f"  {i}) {opt}{mark}")
-    while True:
-        raw = input("Choose a number (Enter keep, - clear): ").strip()
+
+    hint = f" [{default}]" if default else ""
+    prompt = f"Choice{hint} (1-{len(options)}, Enter accept, x clear): "
+    sys.stdout.write(prompt)
+    sys.stdout.flush()
+
+    if not sys.stdin.isatty():
+        raw = input().strip()
         if not raw:
             return default
-        if raw == "-":
+        if raw in ("x", "X", "-"):
             return None
         if raw.isdigit() and 1 <= int(raw) <= len(options):
             return options[int(raw) - 1]
-        print("Invalid choice, try again.")
+        return default
+
+    while True:
+        ch = _get_key()
+        if ch == "\x03":
+            raise KeyboardInterrupt
+        if ch in ("\r", "\n"):
+            sys.stdout.write(f"{default or '(none)'}\n")
+            sys.stdout.flush()
+            return default
+        if ch in ("x", "X", "\x7f", "\x08", "\x1b[3~", "-"):
+            sys.stdout.write("(cleared)\n")
+            sys.stdout.flush()
+            return None
+        if ch.isdigit() and 1 <= int(ch) <= len(options):
+            chosen = options[int(ch) - 1]
+            sys.stdout.write(f"{chosen}\n")
+            sys.stdout.flush()
+            return chosen
 
 
 def ask_yes_no(label, default=False):
-    """Prompt y/n; Enter keeps default."""
+    """Homebrew-style single keypress prompt [y/n] (Enter accepts default)."""
     suffix = "Y/n" if default else "y/N"
-    raw = input(f"{label} ({suffix}): ").strip().lower()
-    if not raw:
-        return default
-    return raw.startswith("y")
+    sys.stdout.write(f"{label} [{suffix}]: ")
+    sys.stdout.flush()
+
+    if not sys.stdin.isatty():
+        raw = input().strip().lower()
+        if not raw:
+            return default
+        return raw.startswith("y")
+
+    while True:
+        ch = _get_key()
+        if ch == "\x03":
+            raise KeyboardInterrupt
+        if ch in ("\r", "\n"):
+            sys.stdout.write("yes\n" if default else "no\n")
+            sys.stdout.flush()
+            return default
+        if ch in ("y", "Y"):
+            sys.stdout.write("yes\n")
+            sys.stdout.flush()
+            return True
+        if ch in ("n", "N"):
+            sys.stdout.write("no\n")
+            sys.stdout.flush()
+            return False
+
+
+def ask_yes_no_optional(label, default=None):
+    """Single keypress tri-state prompt: y -> True, n -> False, x/Delete -> clear, Enter -> keep."""
+    hint = "yes" if default is True else "no" if default is False else "none"
+    sys.stdout.write(f"{label} [{hint}] (y/n, Enter accept, x clear): ")
+    sys.stdout.flush()
+
+    if not sys.stdin.isatty():
+        raw = input().strip().lower()
+        if not raw:
+            return default
+        if raw in ("x", "-"):
+            return None
+        return raw.startswith("y")
+
+    while True:
+        ch = _get_key()
+        if ch == "\x03":
+            raise KeyboardInterrupt
+        if ch in ("\r", "\n"):
+            sys.stdout.write(f"{hint}\n")
+            sys.stdout.flush()
+            return default
+        if ch in ("y", "Y"):
+            sys.stdout.write("yes\n")
+            sys.stdout.flush()
+            return True
+        if ch in ("n", "N"):
+            sys.stdout.write("no\n")
+            sys.stdout.flush()
+            return False
+        if ch in ("x", "X", "\x7f", "\x08", "\x1b[3~", "-"):
+            sys.stdout.write("(cleared)\n")
+            sys.stdout.flush()
+            return None
 
 
 def normalize_path(raw):
@@ -107,27 +241,29 @@ def save_clipboard_image():
 def save_clipboard_pdf():
     """Save a PDF from the macOS clipboard into uploads/. Return the path.
 
-    Expects pasteboard type com.adobe.pdf (from Print → Copy PDF to Clipboard).
+    Print → Copy PDF to Clipboard may use com.adobe.pdf or Apple's PDF type.
     """
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     dest = os.path.join(UPLOAD_DIR, f"clipboard_{stamp}.pdf")
-    dest_esc = __import__("json").dumps(dest)
+    # AppleScriptObjC: try both pasteboard types classic clipboard may set.
+    script = f'''
+use framework "AppKit"
+use framework "Foundation"
+use scripting additions
+set dest to "{dest}"
+set pb to current application's NSPasteboard's generalPasteboard()
+set typeList to {{"com.adobe.pdf", "Apple PDF pasteboard type", "public.pdf"}}
+repeat with t in typeList
+  set d to pb's dataForType:t
+  if d is not missing value then
+    set ok to (d's writeToFile:dest atomically:true)
+    if ok as boolean then return "ok"
+  end if
+end repeat
+error "no pdf"
+'''
     result = subprocess.run(
-        [
-            "osascript",
-            "-l",
-            "JavaScript",
-            "-e",
-            f"""
-ObjC.import('AppKit');
-ObjC.import('Foundation');
-var pb = $.NSPasteboard.generalPasteboard;
-var data = pb.dataForType($('com.adobe.pdf'));
-if (!data || data.length === 0) {{ throw new Error('no pdf'); }}
-var ok = data.writeToFileAtomically({dest_esc}, true);
-if (!ok) {{ throw new Error('write failed'); }}
-""",
-        ],
+        ["osascript", "-e", script],
         capture_output=True,
         text=True,
     )
@@ -198,7 +334,9 @@ def capture():
     print(
         "Tips:\n"
         "  • Cmd+V cannot paste a photo/PDF into the terminal.\n"
-        "  • PDF: Cmd+P → PDF → Copy PDF to Clipboard, then Enter below.\n"
+        "  • PDF: Chrome Cmd+Option+P → PDF → Copy PDF to Clipboard,\n"
+        "    then Enter below (Chrome may flash an error; if the\n"
+        "    notification appeared, the clipboard is fine).\n"
         "  • Image: copy a screenshot, then Enter (or paste a file path).\n"
     )
 
@@ -248,32 +386,8 @@ def capture():
     data["due_date"] = None
 
     print(
-        "\nInferred fields — Enter keep, - reject/clear, or type a new value.\n"
+        "\nReview inferred fields (Enter accept, x reject/clear, Delete edit manually):\n"
     )
-    # Drop every inferred guess; keep JD text/source and today's app date.
-    if ask_yes_no("Reject all inferred fields and enter manually?", False):
-        keep_jd = data.get("job_description")
-        keep_src = data.get("jd_source")
-        keep_link = data.get("link")
-        data = {
-            "role": None,
-            "company": None,
-            "location": None,
-            "location_type": None,
-            "pay": None,
-            "department": None,
-            "posted_date": None,
-            "application_deadline": None,
-            "app_date": date.today().isoformat(),
-            "due_date": None,
-            "job_id": None,
-            "us_citizen_required": None,
-            "link": keep_link,
-            "energy_related": False,
-            "status": "applied",
-            "job_description": keep_jd,
-            "jd_source": keep_src,
-        }
 
     data["role"] = ask_text("Role", data.get("role"))
     data["company"] = ask_text("Company", data.get("company"))
@@ -292,28 +406,16 @@ def capture():
     data["app_date"] = ask_text("Application date (YYYY-MM-DD)", data["app_date"])
     data["due_date"] = ask_text("Due date (YYYY-MM-DD)", data.get("due_date"))
     data["job_id"] = ask_text("Job / req id", data.get("job_id"))
-    # Tri-state: Enter keeps; - clears; y/n overrides.
-    us_default = data.get("us_citizen_required")
-    us_hint = (
-        "yes" if us_default is True else "no" if us_default is False else None
+    data["us_citizen_required"] = ask_yes_no_optional(
+        "US citizen required", data.get("us_citizen_required")
     )
-    us_raw = ask_text("US citizen required (yes/no)", us_hint)
-    if us_raw is None:
-        # `-` clears when a hint was shown; bare Enter with no hint keeps None.
-        data["us_citizen_required"] = None if us_hint is not None else us_default
-    elif us_raw.lower().startswith("y"):
-        data["us_citizen_required"] = True
-    elif us_raw.lower().startswith("n"):
-        data["us_citizen_required"] = False
-    else:
-        data["us_citizen_required"] = us_default
     data["link"] = ask_text("Link", data.get("link"))
     data["energy_related"] = ask_yes_no("Energy related?", data["energy_related"])
     data["status"] = (
         ask_choice("Status", db.STATUSES, data["status"]) or "applied"
     )
 
-    if not ask_yes_no("Save this application?", True):
+    if not ask_yes_no("\nSave this application?", True):
         print("Cancelled.")
         return
 

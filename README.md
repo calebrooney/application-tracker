@@ -54,19 +54,24 @@ Capture a posting with a link and/or screenshot/PDF:
 
 - **Link:** paste the URL as usual.
 - **Screenshot file:** drag a file into the terminal, or paste a path.
-- **PDF via Cmd+P (no Save to Disk):** on the job page, press **Cmd+P** →
-  **PDF** → **Copy PDF to Clipboard**. Then in `applied`, leave the path blank
-  and press **Enter** — text is extracted from the clipboard PDF (the print
-  temp file is deleted by the PDF Service).
+- **PDF via Cmd+P (no Save to Disk):** use the **macOS system** print dialog
+  (not Chrome’s built-in “Save as PDF” destination):
+  - **Chrome:** Cmd+P, then click **Print using system dialog…** (or press
+    **Cmd+Option+P**), then in the system dialog open the **PDF** button
+    (bottom-left) → **Copy PDF to Clipboard**.
+  - **Safari:** Cmd+P already opens the system dialog → **PDF** →
+    **Copy PDF to Clipboard**.
+  Then in `applied`, leave the path blank and press **Enter**.
 - **Clipboard image:** copy a screenshot, then **Enter** at the media prompt
   (Cmd+V of a photo into the terminal does not work).
 
-Then review inferred fields:
+Then review inferred fields (instant single-key controls):
 
-- **Enter** — keep the guess
-- **-** — reject / clear that field
-- type a value — replace it
-- optional prompt to **reject all inferred fields** and fill in manually
+- **Enter** — accept inferred value
+- **x** — reject / clear field and skip
+- **Delete / Backspace** — live manual reentry / correction
+- **1, 2, 3...** — instant selection on numbered menus (asterisk indicates inferred default)
+- **y / n** — instant yes/no toggle (Homebrew style, no Enter required)
 
 A link and a screenshot/PDF can both be used; clipboard is tried when there is
 no link and you press Enter on the media prompt.
