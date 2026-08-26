@@ -55,6 +55,17 @@ def ocr_image(path):
     return pytesseract.image_to_string(Image.open(path)).strip()
 
 
+def pdf_text(path):
+    """Extract text from a PDF (browser Cmd+P saves). Empty if scan-only."""
+    from pypdf import PdfReader
+
+    reader = PdfReader(path)
+    parts = []
+    for page in reader.pages:
+        parts.append(page.extract_text() or "")
+    return "\n".join(parts).strip()
+
+
 def detect_format(url=None, text=None):
     """Return 'workday', 'greenhouse', 'icims', or 'generic' from URL/OCR chrome."""
     url = (url or "").lower()

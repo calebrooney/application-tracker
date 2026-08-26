@@ -1,23 +1,11 @@
 #!/usr/bin/env bash
-# Log a job application from the terminal (link and/or screenshot). No browser.
-# Usage: applied
-
-# Resolve this script's real path (works when invoked via a ~/bin symlink).
-SOURCE="${BASH_SOURCE[0]:-$0}"
-while [ -L "$SOURCE" ]; do
-  DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
-  SOURCE="$(readlink "$SOURCE")"
-  case "$SOURCE" in
-    /*) ;;
-    *) SOURCE="$DIR/$SOURCE" ;;
-  esac
-done
-ROOT="$(cd -P "$(dirname "$SOURCE")" && pwd)"
-
-cd "$ROOT" || exit 1
-
+# Thin shim for ./applied from the repo. Prefer the installed command after
+# `./install-applied.sh` (or `pip install -e .`).
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+if [ -x "$ROOT/.venv/bin/applied" ]; then
+  exec "$ROOT/.venv/bin/applied" "$@"
+fi
 if [ -x "$ROOT/.venv/bin/python" ]; then
   exec "$ROOT/.venv/bin/python" "$ROOT/cli.py" "$@"
-else
-  exec python3 "$ROOT/cli.py" "$@"
 fi
+exec python3 "$ROOT/cli.py" "$@"

@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "job-tracker"
+version = "0.1.0"
+description = "Job application tracker with terminal capture (applied) and Flask GUI"
+requires-python = ">=3.9"
+dependencies = [
+    "flask",
+    "python-dotenv",
+    "psycopg2-binary",
+    "requests",
+    "beautifulsoup4",
+    "pytesseract",
+    "pillow",
+    "openpyxl",
+    "pypdf",
+]
+
+[project.scripts]
+applied = "cli:main"
+
+[tool.setuptools]
+py-modules = ["cli", "db", "parse", "app", "import_xlsx"]

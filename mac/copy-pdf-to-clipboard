@@ -1,0 +1,32 @@
+#!/bin/bash
+# macOS Print dialog → PDF menu item ("Copy PDF to Clipboard").
+# The print system passes a temporary PDF path; we put those bytes on the
+# pasteboard and delete the temp file so the posting is never kept on disk.
+set -euo pipefail
+
+PDF="${1:-}"
+if [ -z "$PDF" ] || [ ! -f "$PDF" ]; then
+  osascript -e 'display notification "No PDF received from Print." with title "Copy PDF to Clipboard"' 2>/dev/null || true
+  exit 1
+fi
+
+# Escape path as a JSON string for safe embedding in JXA.
+PDF_ESC=$(printf '%s' "$PDF" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')
+
+osascript -l JavaScript -e "
+ObjC.import('AppKit');
+ObjC.import('Foundation');
+var path = ${PDF_ESC};
+var data = \$.NSData.dataWithContentsOfFile(path);
+if (!data || data.length === 0) {
+  throw new Error('Could not read PDF');
+}
+var pb = \$.NSPasteboard.generalPasteboard;
+pb.clearContents;
+pb.setDataForType(data, \$('com.adobe.pdf'));
+"
+
+# Clipboard holds the PDF; remove the print-system temp file.
+rm -f "$PDF"
+
+osascript -e 'display notification "PDF is on the clipboard — run applied and press Enter." with title "Copy PDF to Clipboard"' 2>/dev/null || true

@@ -13,51 +13,63 @@ and prefills the form for you to validate instead of typing from scratch.
    brew install tesseract
    ```
 
-2. Install Python dependencies:
+2. Install the package (creates `.venv`, installs deps, puts `applied` on PATH):
 
    ```bash
-   pip install -r requirements.txt
+   ./install-applied.sh
    ```
 
-3. Create a Postgres database and point `DATABASE_URL` at it. Defaults to
-   `postgresql://localhost/jobtracker` if unset.
+   Or manually:
+
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate
+   pip install -e .
+   ```
+
+   After a PATH install, open a new terminal tab and run `applied` from anywhere
+   (same idea as Homebrew / Claude Code CLI entry points).
+
+   `./install-applied.sh` also installs a **Print → PDF** menu item
+   (`Copy PDF to Clipboard`) under `~/Library/PDF Services/`. That is the right
+   hook for Cmd+P (a normal CLI command cannot intercept the print dialog).
+
+3. Create a Postgres database and set `DATABASE_URL` in a `.env` file in this
+   repo (see `.env.example`). Defaults to `postgresql://localhost/jobtracker`
+   if unset.
 
    ```bash
    createdb jobtracker
-   export DATABASE_URL="postgresql://localhost/jobtracker"
    ```
 
    The `applications` table is created automatically on first run.
 
-## Quick launch from Terminal
-
-After one-time install (adds `~/bin` to your PATH):
-
-```bash
-./install-applied.sh
-```
-
-Open a new terminal tab and type:
+## `applied` (terminal capture)
 
 ```bash
 applied
 ```
 
-Paste a job link, and/or a screenshot:
+Capture a posting with a link and/or screenshot/PDF:
 
 - **Link:** paste the URL as usual.
-- **Screenshot file:** drag a file into the terminal, or paste a path (`~/Desktop/...`;
-  quotes are stripped).
-- **Clipboard image:** Terminal cannot receive Cmd+V of a *photo*. Copy the
-  screenshot (e.g. Cmd+Ctrl+Shift+4, or Copy in Preview), leave the link blank if
-  you are not using one, then press **Enter** at
-  `Screenshot path (or Enter to use clipboard image)` — the CLI reads the image
-  from the macOS clipboard and OCRs it.
+- **Screenshot file:** drag a file into the terminal, or paste a path.
+- **PDF via Cmd+P (no Save to Disk):** on the job page, press **Cmd+P** →
+  **PDF** → **Copy PDF to Clipboard**. Then in `applied`, leave the path blank
+  and press **Enter** — text is extracted from the clipboard PDF (the print
+  temp file is deleted by the PDF Service).
+- **Clipboard image:** copy a screenshot, then **Enter** at the media prompt
+  (Cmd+V of a photo into the terminal does not work).
 
-Fields are inferred (same scrape/OCR as the web GUI), you confirm/edit in the
-terminal, and the row is saved — no browser. A link and a screenshot can both
-be used; clipboard is only tried when there is no link and you press Enter on
-the screenshot prompt.
+Then review inferred fields:
+
+- **Enter** — keep the guess
+- **-** — reject / clear that field
+- type a value — replace it
+- optional prompt to **reject all inferred fields** and fill in manually
+
+A link and a screenshot/PDF can both be used; clipboard is tried when there is
+no link and you press Enter on the media prompt.
 
 ## Run the web GUI
 
@@ -84,7 +96,8 @@ Then open http://127.0.0.1:5000
 ## Add via CLI (same as `applied`)
 
 ```bash
-python cli.py
+applied
+# or: python cli.py
 ```
 
 ## Import existing spreadsheet data (optional)

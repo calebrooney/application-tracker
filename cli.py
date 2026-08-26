@@ -18,24 +18,28 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
 def ask_text(label, default=None):
-    """Prompt for text; Enter keeps default (or None if blank with no default)."""
+    """Prompt for text: Enter keeps default, `-` clears, anything else replaces."""
     hint = f" [{default}]" if default else ""
     value = input(f"{label}{hint}: ").strip()
+    if value == "-":
+        return None
     if value:
         return value
     return default
 
 
 def ask_choice(label, options, default=None):
-    """Prompt with a numbered menu; Enter keeps default."""
+    """Numbered menu: Enter keeps default, `-` clears, number picks."""
     print(f"\n{label}:")
     for i, opt in enumerate(options, start=1):
         mark = " *" if opt == default else ""
         print(f"  {i}) {opt}{mark}")
     while True:
-        raw = input("Choose a number (Enter to keep): ").strip()
+        raw = input("Choose a number (Enter keep, - clear): ").strip()
         if not raw:
             return default
+        if raw == "-":
+            return None
         if raw.isdigit() and 1 <= int(raw) <= len(options):
             return options[int(raw) - 1]
         print("Invalid choice, try again.")
@@ -96,49 +100,118 @@ def save_clipboard_image():
         text=True,
     )
     if result.returncode != 0 or not os.path.isfile(dest) or os.path.getsize(dest) == 0:
-        raise RuntimeError(
-            "No image on the clipboard. Copy a screenshot (Cmd+Ctrl+Shift+4, "
-            "or Copy in Preview), then press Enter at the screenshot prompt."
-        )
+        raise RuntimeError("no image")
     return dest
 
 
-def resolve_screenshot(raw):
-    """Turn a path or empty Enter (clipboard) into a local image path for OCR."""
+def save_clipboard_pdf():
+    """Save a PDF from the macOS clipboard into uploads/. Return the path.
+
+    Expects pasteboard type com.adobe.pdf (from Print → Copy PDF to Clipboard).
+    """
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    dest = os.path.join(UPLOAD_DIR, f"clipboard_{stamp}.pdf")
+    dest_esc = __import__("json").dumps(dest)
+    result = subprocess.run(
+        [
+            "osascript",
+            "-l",
+            "JavaScript",
+            "-e",
+            f"""
+ObjC.import('AppKit');
+ObjC.import('Foundation');
+var pb = $.NSPasteboard.generalPasteboard;
+var data = pb.dataForType($('com.adobe.pdf'));
+if (!data || data.length === 0) {{ throw new Error('no pdf'); }}
+var ok = data.writeToFileAtomically({dest_esc}, true);
+if (!ok) {{ throw new Error('write failed'); }}
+""",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0 or not os.path.isfile(dest) or os.path.getsize(dest) == 0:
+        raise RuntimeError("no pdf")
+    return dest
+
+
+def read_clipboard_capture():
+    """Pull PDF or PNG from the clipboard into uploads/. Prefer PDF."""
+    try:
+        print("Reading PDF from clipboard...")
+        return save_clipboard_pdf(), "pdf"
+    except RuntimeError:
+        pass
+    try:
+        print("Reading image from clipboard...")
+        return save_clipboard_image(), "image"
+    except RuntimeError:
+        pass
+    raise RuntimeError(
+        "Clipboard has no PDF or image.\n"
+        "  • PDF: Cmd+P → PDF → Copy PDF to Clipboard, then Enter here.\n"
+        "  • Image: copy a screenshot, then Enter here."
+    )
+
+
+def text_from_file(path):
+    """OCR an image or extract text from a PDF at path."""
+    lower = path.lower()
+    if lower.endswith(".pdf"):
+        print("Extracting text from PDF...")
+        text = parse.pdf_text(path)
+        # Clipboard PDFs are ephemeral — drop the temp copy after extract.
+        if os.path.basename(path).startswith("clipboard_"):
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+        if not text:
+            raise RuntimeError(
+                "PDF had no extractable text (likely a scan). "
+                "Use a screenshot + OCR instead."
+            )
+        return text
+    print("Running OCR...")
+    return parse.ocr_image(path)
+
+
+def resolve_capture(raw):
+    """Path or empty Enter (clipboard PDF/image) → local file for parsing."""
     if raw:
         path = normalize_path(raw)
         if not path or not os.path.isfile(path):
             raise FileNotFoundError(f"File not found: {path or raw}")
         dest = os.path.join(UPLOAD_DIR, os.path.basename(path))
-        # Skip copy when the file is already under uploads/.
         if os.path.abspath(path) != os.path.abspath(dest):
             shutil.copy2(path, dest)
         return dest, os.path.basename(path)
-    print("Reading image from clipboard...")
-    dest = save_clipboard_image()
+    dest, _kind = read_clipboard_capture()
     return dest, os.path.basename(dest)
 
 
 def capture():
-    """Read a link and/or screenshot, infer fields, confirm, and insert."""
+    """Read a link and/or screenshot/PDF, infer fields, confirm, and insert."""
     db.init_db()
-    print("New application — paste a link and/or screenshot\n")
+    print("New application — paste a link and/or screenshot/PDF\n")
     print(
-        "Tip: Cmd+V cannot paste a photo into the terminal. "
-        "Copy the image, then press Enter at the screenshot prompt "
-        "(or paste a file path instead).\n"
+        "Tips:\n"
+        "  • Cmd+V cannot paste a photo/PDF into the terminal.\n"
+        "  • PDF: Cmd+P → PDF → Copy PDF to Clipboard, then Enter below.\n"
+        "  • Image: copy a screenshot, then Enter (or paste a file path).\n"
     )
 
     link = ask_text("Job posting link")
-    # Empty Enter with no link → read PNG from macOS clipboard.
-    screenshot = ask_text("Screenshot path (or Enter to use clipboard image)")
+    # Empty Enter with no link → read PDF/PNG from macOS clipboard.
+    media = ask_text("Screenshot/PDF path (or Enter to use clipboard)")
 
-    # Path pasted into the link field (common) → treat as screenshot.
+    # Path pasted into the link field (common) → treat as media.
     if link:
         link_as_file = normalize_path(link)
         if link_as_file and os.path.isfile(link_as_file):
-            if not screenshot:
-                screenshot = link
+            if not media:
+                media = link
             link = None
 
     parts = []
@@ -149,15 +222,14 @@ def capture():
             parts.append(parse.parse_link(link))
             sources.append(link)
 
-        # Path given → OCR it. No path and no link → clipboard image.
-        if screenshot or not link:
-            path, name = resolve_screenshot(screenshot)
-            print("Running OCR...")
-            parts.append(parse.ocr_image(path))
+        # Path given → parse it. No path and no link → clipboard PDF/image.
+        if media or not link:
+            path, name = resolve_capture(media)
+            parts.append(text_from_file(path))
             sources.append(name)
 
         if not parts:
-            print("Need a link or a screenshot.")
+            print("Need a link, screenshot, or PDF.")
             return
     except Exception as err:
         print(f"Could not read the posting: {err}")
@@ -175,7 +247,34 @@ def capture():
     data["energy_related"] = False
     data["due_date"] = None
 
-    print("\nInferred fields — press Enter to keep, or type a new value.\n")
+    print(
+        "\nInferred fields — Enter keep, - reject/clear, or type a new value.\n"
+    )
+    # Drop every inferred guess; keep JD text/source and today's app date.
+    if ask_yes_no("Reject all inferred fields and enter manually?", False):
+        keep_jd = data.get("job_description")
+        keep_src = data.get("jd_source")
+        keep_link = data.get("link")
+        data = {
+            "role": None,
+            "company": None,
+            "location": None,
+            "location_type": None,
+            "pay": None,
+            "department": None,
+            "posted_date": None,
+            "application_deadline": None,
+            "app_date": date.today().isoformat(),
+            "due_date": None,
+            "job_id": None,
+            "us_citizen_required": None,
+            "link": keep_link,
+            "energy_related": False,
+            "status": "applied",
+            "job_description": keep_jd,
+            "jd_source": keep_src,
+        }
+
     data["role"] = ask_text("Role", data.get("role"))
     data["company"] = ask_text("Company", data.get("company"))
     data["location"] = ask_text("Location", data.get("location"))
@@ -193,15 +292,18 @@ def capture():
     data["app_date"] = ask_text("Application date (YYYY-MM-DD)", data["app_date"])
     data["due_date"] = ask_text("Due date (YYYY-MM-DD)", data.get("due_date"))
     data["job_id"] = ask_text("Job / req id", data.get("job_id"))
-    # Tri-state: Enter keeps inferred; y/n overrides.
+    # Tri-state: Enter keeps; - clears; y/n overrides.
     us_default = data.get("us_citizen_required")
     us_hint = (
         "yes" if us_default is True else "no" if us_default is False else None
     )
     us_raw = ask_text("US citizen required (yes/no)", us_hint)
-    if us_raw and us_raw.lower().startswith("y"):
+    if us_raw is None:
+        # `-` clears when a hint was shown; bare Enter with no hint keeps None.
+        data["us_citizen_required"] = None if us_hint is not None else us_default
+    elif us_raw.lower().startswith("y"):
         data["us_citizen_required"] = True
-    elif us_raw and us_raw.lower().startswith("n"):
+    elif us_raw.lower().startswith("n"):
         data["us_citizen_required"] = False
     else:
         data["us_citizen_required"] = us_default

@@ -8,8 +8,8 @@ import os
 
 from dotenv import load_dotenv
 
-# Load DATABASE_URL from a local .env file (not committed to git).
-load_dotenv()
+# Load .env from the package directory (works no matter what cwd `applied` uses).
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 import psycopg2
 import psycopg2.extras
