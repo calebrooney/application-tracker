@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Review Application</h1>
+{% if data.job_description %}
+<p class="muted">Prefilled from the posting &mdash; please check each field.</p>
+{% endif %}
+
+<form method="post" action="{{ url_for('save') }}">
+  <div class="stack">
+    {# Raw JD text and its source are carried over from the capture step. #}
+    <input type="hidden" name="job_description" value="{{ data.job_description or '' }}">
+    <input type="hidden" name="jd_source" value="{{ data.jd_source or '' }}">
+
+    <label>Role
+      <input type="text" name="role" value="{{ data.role or '' }}" required>
+    </label>
+    <label>Company
+      <input type="text" name="company" value="{{ data.company or '' }}" required>
+    </label>
+    <label>Location
+      <input type="text" name="location" value="{{ data.location or '' }}" placeholder="e.g. San Diego">
+    </label>
+    <label>Location type
+      <select name="location_type">
+        <option value="">--</option>
+        {% for t in location_types %}
+        <option value="{{ t }}" {% if data.location_type == t %}selected{% endif %}>{{ t }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Pay
+      <input type="text" name="pay" value="{{ data.pay or '' }}" placeholder="e.g. 20-30">
+    </label>
+    <label>Application date
+      <input type="date" name="app_date" value="{{ data.app_date or today }}">
+    </label>
+    <label>Due / expected response date
+      <input type="date" name="due_date" value="{{ data.due_date or '' }}">
+    </label>
+    <label>Job / req id
+      <input type="text" name="job_id" value="{{ data.job_id or '' }}">
+    </label>
+    <label>Link
+      <input type="url" name="link" value="{{ data.link or '' }}" placeholder="https://...">
+    </label>
+    <label>Status
+      <select name="status">
+        {% for s in statuses %}
+        <option value="{{ s }}" {% if data.status == s %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="checkbox">
+      <input type="checkbox" name="energy_related" {% if data.energy_related %}checked{% endif %}> Energy related
+    </label>
+  </div>
+
+  <div class="actions">
+    <button class="btn" type="submit">Save</button>
+    <a class="btn btn-cancel" href="{{ url_for('index') }}">× Cancel</a>
+  </div>
+</form>
+
+{% if data.job_description %}
+<details>
+  <summary>Captured job description</summary>
+  <pre class="jd">{{ data.job_description }}</pre>
+</details>
+{% endif %}
+{% endblock %}

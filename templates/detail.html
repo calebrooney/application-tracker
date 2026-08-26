@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ app.role or "Application" }}</h1>
+<p class="muted">{{ app.company or "" }}</p>
+
+<dl class="details">
+  <dt>Location</dt><dd>{{ app.location or "-" }} ({{ app.location_type or "-" }})</dd>
+  <dt>Pay</dt><dd>{{ app.pay or "-" }}</dd>
+  <dt>Applied</dt><dd>{{ app.app_date or "-" }}</dd>
+  <dt>Due</dt><dd>{{ app.due_date or "-" }}</dd>
+  <dt>Job id</dt><dd>{{ app.job_id or "-" }}</dd>
+  <dt>Status</dt><dd><span class="status status-{{ app.status }}">{{ app.status or "-" }}</span></dd>
+  <dt>Energy related</dt><dd>{{ "yes" if app.energy_related else "no" }}</dd>
+  <dt>Link</dt>
+  <dd>{% if app.link %}<a href="{{ app.link }}" target="_blank">{{ app.link }}</a>{% else %}-{% endif %}</dd>
+</dl>
+
+<h2>Job Description</h2>
+{% if app.job_description %}
+  <p class="muted">Source: {{ app.jd_source or "-" }}</p>
+  <pre class="jd">{{ app.job_description }}</pre>
+{% else %}
+  <p class="muted">No job description captured yet.</p>
+{% endif %}
+
+<h3>Capture job description</h3>
+<form method="post" action="{{ url_for('capture_jd', app_id=app.id) }}"
+      enctype="multipart/form-data" class="stack">
+  <label>From a link
+    <input type="url" name="link" placeholder="https://...">
+  </label>
+  <p class="muted">or</p>
+  <label>From a screenshot (OCR)
+    <input type="file" name="screenshot" accept="image/*">
+  </label>
+  <button class="btn" type="submit">Capture</button>
+</form>
+
+<p><a href="{{ url_for('index') }}">&larr; Back to list</a></p>
+{% endblock %}

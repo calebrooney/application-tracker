@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Applications</h1>
+
+{% if applications %}
+<table>
+  <thead>
+    <tr>
+      <th>Role</th>
+      <th>Company</th>
+      <th>Location</th>
+      <th>Type</th>
+      <th>Pay</th>
+      <th>Applied</th>
+      <th>Due</th>
+      <th>Status</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for a in applications %}
+    <tr>
+      <td>{{ a.role or "" }}</td>
+      <td>{{ a.company or "" }}</td>
+      <td>{{ a.location or "" }}</td>
+      <td>{{ a.location_type or "" }}</td>
+      <td>{{ a.pay or "" }}</td>
+      <td>{{ a.app_date or "" }}</td>
+      <td>{{ a.due_date or "" }}</td>
+      <td><span class="status status-{{ a.status }}">{{ a.status or "" }}</span></td>
+      <td><a href="{{ url_for('detail', app_id=a.id) }}">view</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>No applications yet. <a href="{{ url_for('add') }}">Add your first one.</a></p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,161 @@
+"""Flask web GUI for the job application tracker.
+
+Add flow is capture-first: paste a link and/or upload a screenshot, we
+infer the fields from the job description and prefill the form, then the
+user validates/edits and saves. Also: list, view details, and re-capture
+a JD on an existing application.
+"""
+
+import os
+from datetime import date
+
+from flask import Flask, flash, redirect, render_template, request, url_for
+from werkzeug.utils import secure_filename
+
+import db
+import parse
+
+app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY", "dev-secret")
+
+# Screenshots uploaded for OCR are stored here.
+UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+# Create the table on startup if needed.
+db.init_db()
+
+
+@app.route("/")
+def index():
+    """Show the table of all applications."""
+    return render_template("index.html", applications=db.list_applications())
+
+
+def _render_form(data):
+    """Render the validate/edit form, prefilled with `data`.
+
+    `app_date` defaults to today so the common case needs no editing.
+    """
+    return render_template(
+        "form.html",
+        data=data,
+        today=date.today().isoformat(),
+        location_types=db.LOCATION_TYPES,
+        statuses=db.STATUSES,
+    )
+
+
+@app.route("/add", methods=["GET", "POST"])
+def add():
+    """Capture step: read a link/screenshot and prefill the form to validate.
+
+    GET shows the capture screen (or an empty form with ?manual=1). POST
+    parses the posting, infers fields, and hands off to the form so the
+    user only has to confirm.
+    """
+    if request.method == "POST":
+        link = request.form.get("link", "").strip()
+        screenshot = request.files.get("screenshot")
+
+        text = None
+        source = None
+        try:
+            if link:
+                text = parse.parse_link(link)
+                source = link
+            elif screenshot and screenshot.filename:
+                filename = secure_filename(screenshot.filename)
+                saved_path = os.path.join(UPLOAD_DIR, filename)
+                screenshot.save(saved_path)
+                text = parse.ocr_image(saved_path)
+                source = filename
+            else:
+                flash("Paste a link or upload a screenshot, or enter details manually.")
+                return redirect(url_for("add"))
+        except Exception as err:  # surface parsing/OCR errors to the user
+            flash(f"Could not read the job posting: {err}")
+            return redirect(url_for("add"))
+
+        # Infer fields from the JD, then carry the raw text/source forward.
+        data = parse.extract_fields(text)
+        data["link"] = link or None
+        data["job_description"] = text
+        data["jd_source"] = source
+        return _render_form(data)
+
+    # GET: allow skipping capture to type everything by hand.
+    if request.args.get("manual"):
+        return _render_form({})
+    return render_template("capture.html")
+
+
+@app.route("/save", methods=["POST"])
+def save():
+    """Insert the application after the user validates the prefilled form."""
+    form = request.form
+    data = {
+        "role": form.get("role") or None,
+        "company": form.get("company") or None,
+        "location": form.get("location") or None,
+        "location_type": form.get("location_type") or None,
+        "pay": form.get("pay") or None,
+        # Applied date defaults to today; user may override for edge cases.
+        "app_date": form.get("app_date") or date.today().isoformat(),
+        "due_date": form.get("due_date") or None,
+        "job_id": form.get("job_id") or None,
+        "link": form.get("link") or None,
+        # Unchecked checkbox is absent from the form data.
+        "energy_related": "energy_related" in form,
+        "status": form.get("status") or "applied",
+        # Carried over from the capture step (hidden inputs).
+        "job_description": form.get("job_description") or None,
+        "jd_source": form.get("jd_source") or None,
+    }
+    app_id = db.add_application(data)
+    flash("Application added.")
+    return redirect(url_for("detail", app_id=app_id))
+
+
+@app.route("/app/<int:app_id>")
+def detail(app_id):
+    """Show a single application and its stored job description."""
+    application = db.get_application(app_id)
+    if application is None:
+        flash("Application not found.")
+        return redirect(url_for("index"))
+    return render_template("detail.html", app=application)
+
+
+@app.route("/app/<int:app_id>/jd", methods=["POST"])
+def capture_jd(app_id):
+    """Capture a job description from a pasted link or a screenshot upload."""
+    link = request.form.get("link", "").strip()
+    screenshot = request.files.get("screenshot")
+
+    text = None
+    source = None
+    try:
+        if link:
+            text = parse.parse_link(link)
+            source = link
+        elif screenshot and screenshot.filename:
+            filename = secure_filename(screenshot.filename)
+            saved_path = os.path.join(UPLOAD_DIR, f"{app_id}_{filename}")
+            screenshot.save(saved_path)
+            text = parse.ocr_image(saved_path)
+            source = filename
+        else:
+            flash("Provide a link or a screenshot to capture the job description.")
+            return redirect(url_for("detail", app_id=app_id))
+    except Exception as err:  # surface parsing/OCR errors to the user
+        flash(f"Could not capture job description: {err}")
+        return redirect(url_for("detail", app_id=app_id))
+
+    db.update_jd(app_id, text, source)
+    flash("Job description captured.")
+    return redirect(url_for("detail", app_id=app_id))
+
+
+if __name__ == "__main__":
+    app.run(debug=True)

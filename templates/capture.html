@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>New Application</h1>
+<p class="muted">Paste a link or upload a screenshot of the posting. We'll read
+  it and prefill the form for you to check.</p>
+
+<form method="post" action="{{ url_for('add') }}"
+      enctype="multipart/form-data">
+  <div class="stack">
+    <label>Job posting link
+      <input type="url" name="link" placeholder="https://...">
+    </label>
+    <p class="muted">and / or</p>
+    <div>
+      <div class="field-label">Screenshot (OCR)</div>
+      {# Hidden file input; the dropzone fills it via paste / drag / browse. #}
+      <input type="file" name="screenshot" id="screenshot" accept="image/*" hidden>
+      <div class="dropzone" id="dropzone" tabindex="0" role="button"
+           aria-label="Drop or paste a screenshot">
+        <img id="dropzone-preview" class="dropzone-preview" alt="" hidden>
+        <div class="dropzone-hint" id="dropzone-hint">
+          Drop image here or paste (⌘V)
+          <button type="button" class="browse-link" id="browse-screenshot">Browse</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="actions">
+    <button class="btn" type="submit">Read &amp; prefill</button>
+    <a class="btn btn-cancel" href="{{ url_for('index') }}">× Cancel</a>
+  </div>
+</form>
+
+<p><a href="{{ url_for('add', manual=1) }}">Skip &mdash; enter details manually</a></p>
+
+<script>
+(function () {
+  var input = document.getElementById("screenshot");
+  var zone = document.getElementById("dropzone");
+  var hint = document.getElementById("dropzone-hint");
+  var preview = document.getElementById("dropzone-preview");
+  var browse = document.getElementById("browse-screenshot");
+
+  function setFile(file) {
+    if (!file || file.type.indexOf("image/") !== 0) return;
+    var dt = new DataTransfer();
+    dt.items.add(file);
+    input.files = dt.files;
+    preview.src = URL.createObjectURL(file);
+    preview.hidden = false;
+    hint.firstChild.textContent = (file.name || "Screenshot ready") + " ";
+    zone.classList.add("has-file");
+    zone.focus();
+  }
+
+  // Click focuses the zone so ⌘V works (like Cursor); Browse opens the picker.
+  zone.addEventListener("click", function () { zone.focus(); });
+  browse.addEventListener("click", function (e) {
+    e.stopPropagation();
+    input.click();
+  });
+  input.addEventListener("change", function () {
+    if (input.files[0]) setFile(input.files[0]);
+  });
+
+  zone.addEventListener("dragover", function (e) {
+    e.preventDefault();
+    zone.classList.add("dragover");
+  });
+  zone.addEventListener("dragleave", function () {
+    zone.classList.remove("dragover");
+  });
+  zone.addEventListener("drop", function (e) {
+    e.preventDefault();
+    zone.classList.remove("dragover");
+    var file = e.dataTransfer.files[0];
+    if (file) setFile(file);
+  });
+
+  document.addEventListener("paste", function (e) {
+    var items = e.clipboardData && e.clipboardData.items;
+    if (!items) return;
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf("image/") !== 0) continue;
+      e.preventDefault();
+      setFile(new File([items[i].getAsFile()], "clipboard.png", { type: items[i].type }));
+      return;
+    }
+  });
+})();
+</script>
+{% endblock %}
