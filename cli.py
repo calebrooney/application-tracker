@@ -166,7 +166,7 @@ def capture():
     text = "\n\n".join(parts)
     source = " + ".join(sources)
 
-    data = parse.extract_fields(text)
+    data = parse.extract_fields(text, url=link)
     data["link"] = link
     data["job_description"] = text
     data["jd_source"] = source
@@ -183,9 +183,28 @@ def capture():
         "Location type", db.LOCATION_TYPES, data.get("location_type")
     )
     data["pay"] = ask_text("Pay", data.get("pay"))
+    data["department"] = ask_text("Department / team", data.get("department"))
+    data["posted_date"] = ask_text(
+        "Posted date (YYYY-MM-DD)", data.get("posted_date")
+    )
+    data["application_deadline"] = ask_text(
+        "Application deadline (YYYY-MM-DD)", data.get("application_deadline")
+    )
     data["app_date"] = ask_text("Application date (YYYY-MM-DD)", data["app_date"])
     data["due_date"] = ask_text("Due date (YYYY-MM-DD)", data.get("due_date"))
     data["job_id"] = ask_text("Job / req id", data.get("job_id"))
+    # Tri-state: Enter keeps inferred; y/n overrides.
+    us_default = data.get("us_citizen_required")
+    us_hint = (
+        "yes" if us_default is True else "no" if us_default is False else None
+    )
+    us_raw = ask_text("US citizen required (yes/no)", us_hint)
+    if us_raw and us_raw.lower().startswith("y"):
+        data["us_citizen_required"] = True
+    elif us_raw and us_raw.lower().startswith("n"):
+        data["us_citizen_required"] = False
+    else:
+        data["us_citizen_required"] = us_default
     data["link"] = ask_text("Link", data.get("link"))
     data["energy_related"] = ask_yes_no("Energy related?", data["energy_related"])
     data["status"] = (

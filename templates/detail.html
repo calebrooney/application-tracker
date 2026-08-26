@@ -6,9 +6,14 @@
 <dl class="details">
   <dt>Location</dt><dd>{{ app.location or "-" }} ({{ app.location_type or "-" }})</dd>
   <dt>Pay</dt><dd>{{ app.pay or "-" }}</dd>
+  <dt>Department</dt><dd>{{ app.department or "-" }}</dd>
+  <dt>Posted</dt><dd>{{ app.posted_date or "-" }}</dd>
+  <dt>App deadline</dt><dd>{{ app.application_deadline or "-" }}</dd>
   <dt>Applied</dt><dd>{{ app.app_date or "-" }}</dd>
   <dt>Due</dt><dd>{{ app.due_date or "-" }}</dd>
   <dt>Job id</dt><dd>{{ app.job_id or "-" }}</dd>
+  <dt>US citizen required</dt>
+  <dd>{% if app.us_citizen_required is none %}-{% elif app.us_citizen_required %}yes{% else %}no{% endif %}</dd>
   <dt>Status</dt><dd><span class="status status-{{ app.status }}">{{ app.status or "-" }}</span></dd>
   <dt>Energy related</dt><dd>{{ "yes" if app.energy_related else "no" }}</dd>
   <dt>Link</dt>

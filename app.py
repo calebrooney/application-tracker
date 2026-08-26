@@ -77,8 +77,8 @@ def add():
             flash(f"Could not read the job posting: {err}")
             return redirect(url_for("add"))
 
-        # Infer fields from the JD, then carry the raw text/source forward.
-        data = parse.extract_fields(text)
+        # Infer fields (Workday/Greenhouse/iCIMS-aware), then carry raw JD forward.
+        data = parse.extract_fields(text, url=link or None)
         data["link"] = link or None
         data["job_description"] = text
         data["jd_source"] = source
@@ -94,6 +94,15 @@ def add():
 def save():
     """Insert the application after the user validates the prefilled form."""
     form = request.form
+    # Tri-state: yes / no / blank (unknown).
+    us_cit = form.get("us_citizen_required", "")
+    if us_cit == "yes":
+        us_citizen_required = True
+    elif us_cit == "no":
+        us_citizen_required = False
+    else:
+        us_citizen_required = None
+
     data = {
         "role": form.get("role") or None,
         "company": form.get("company") or None,
@@ -111,6 +120,10 @@ def save():
         # Carried over from the capture step (hidden inputs).
         "job_description": form.get("job_description") or None,
         "jd_source": form.get("jd_source") or None,
+        "posted_date": form.get("posted_date") or None,
+        "application_deadline": form.get("application_deadline") or None,
+        "department": form.get("department") or None,
+        "us_citizen_required": us_citizen_required,
     }
     app_id = db.add_application(data)
     flash("Application added.")

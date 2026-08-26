@@ -28,7 +28,7 @@ def get_connection():
 
 
 def init_db():
-    """Create the applications table if it does not already exist."""
+    """Create the applications table if needed; add newer columns if missing."""
     with get_connection() as conn, conn.cursor() as cur:
         cur.execute(
             """
@@ -47,10 +47,24 @@ def init_db():
                 status          TEXT DEFAULT 'applied',
                 job_description TEXT,
                 jd_source       TEXT,
+                posted_date     DATE,
+                application_deadline DATE,
+                department      TEXT,
+                us_citizen_required BOOLEAN,
                 created_at      TIMESTAMPTZ DEFAULT now()
             )
             """
         )
+        # Existing DBs created before these columns need a light migration.
+        for col, typ in [
+            ("posted_date", "DATE"),
+            ("application_deadline", "DATE"),
+            ("department", "TEXT"),
+            ("us_citizen_required", "BOOLEAN"),
+        ]:
+            cur.execute(
+                f"ALTER TABLE applications ADD COLUMN IF NOT EXISTS {col} {typ}"
+            )
 
 
 def add_application(data):
@@ -63,6 +77,8 @@ def add_application(data):
         "role", "company", "location", "location_type", "pay",
         "app_date", "due_date", "job_id", "link", "energy_related",
         "status", "job_description", "jd_source",
+        "posted_date", "application_deadline", "department",
+        "us_citizen_required",
     ]
     values = [data.get(f) for f in fields]
     placeholders = ", ".join(["%s"] * len(fields))

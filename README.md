@@ -71,8 +71,10 @@ Then open http://127.0.0.1:5000
 - **+ New Application** starts the capture-first flow:
   1. Paste a job link (scraped with BeautifulSoup) and/or upload a screenshot
      (OCR'd with Tesseract). Screenshots are saved under `uploads/`.
-  2. Fields (role, company, location, location type, pay, job id) are inferred
-     via simple regex heuristics and prefilled; the raw JD is carried along.
+  2. Fields are inferred with format-aware heuristics (**Workday**, **Greenhouse**,
+     **iCIMS** POC; otherwise generic regex) and prefilled — including
+     posted date, application deadline, department, and US-citizen-required
+     when visible. See [JD-FORMATS.md](JD-FORMATS.md).
   3. Validate/edit the form and save. The **application date defaults to today**
      (editable for backfilling older applications).
   - Prefer to type it all yourself? Use the "Skip — enter details manually" link.

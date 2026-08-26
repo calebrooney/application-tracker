@@ -31,6 +31,15 @@
     <label>Pay
       <input type="text" name="pay" value="{{ data.pay or '' }}" placeholder="e.g. 20-30">
     </label>
+    <label>Department / team
+      <input type="text" name="department" value="{{ data.department or '' }}">
+    </label>
+    <label>Posted date
+      <input type="date" name="posted_date" value="{{ data.posted_date or '' }}">
+    </label>
+    <label>Application deadline (from JD)
+      <input type="date" name="application_deadline" value="{{ data.application_deadline or '' }}">
+    </label>
     <label>Application date
       <input type="date" name="app_date" value="{{ data.app_date or today }}">
     </label>
@@ -39,6 +48,13 @@
     </label>
     <label>Job / req id
       <input type="text" name="job_id" value="{{ data.job_id or '' }}">
+    </label>
+    <label>US citizen required
+      <select name="us_citizen_required">
+        <option value="">--</option>
+        <option value="yes" {% if data.us_citizen_required is sameas true %}selected{% endif %}>yes</option>
+        <option value="no" {% if data.us_citizen_required is sameas false %}selected{% endif %}>no</option>
+      </select>
     </label>
     <label>Link
       <input type="url" name="link" value="{{ data.link or '' }}" placeholder="https://...">
