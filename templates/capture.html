@@ -1,59 +1,78 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>New Application</h1>
-<p class="muted">Paste a link or upload a screenshot of the posting. We'll read
-  it and prefill the form for you to check.</p>
+<div style="max-width: 600px; margin: 0 auto;">
+  <div style="margin-bottom: 24px;">
+    <h1>New Application</h1>
+    <p class="muted">Paste a posting link or drop a screenshot. We'll extract the job details and prefill the form automatically.</p>
+  </div>
 
-<form method="post" action="{{ url_for('add') }}"
-      enctype="multipart/form-data">
-  <div class="stack">
-    <label>Job posting link
-      <input type="url" name="link" placeholder="https://...">
-    </label>
-    <p class="muted">and / or</p>
-    <div>
-      <div class="field-label">Screenshot (OCR)</div>
-      {# Hidden file input; the dropzone fills it via paste / drag / browse. #}
-      <input type="file" name="screenshot" id="screenshot" accept="image/*" hidden>
-      <div class="dropzone" id="dropzone" tabindex="0" role="button"
-           aria-label="Drop or paste a screenshot">
-        <img id="dropzone-preview" class="dropzone-preview" alt="" hidden>
-        <div class="dropzone-hint" id="dropzone-hint">
-          Drop image here or paste (⌘V)
-          <button type="button" class="browse-link" id="browse-screenshot">Browse</button>
+  <form method="post" action="{{ url_for('add') }}" enctype="multipart/form-data">
+    <div class="card">
+      <div class="form-group" style="margin-bottom: 20px;">
+        <label for="link">Job Posting Link</label>
+        <input type="url" id="link" name="link" placeholder="https://careers.company.com/job/12345">
+        <span class="subtext">Supported: Greenhouse, Workday, iCIMS, or any standard job page</span>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 12px; margin: 16px 0;">
+        <div style="flex: 1; height: 1px; background: var(--border);"></div>
+        <span class="subtext" style="text-transform: uppercase; font-size: 11px; font-weight: 600; letter-spacing: 0.05em;">or screenshot / PDF</span>
+        <div style="flex: 1; height: 1px; background: var(--border);"></div>
+      </div>
+
+      <div class="form-group">
+        <label>Screenshot or PDF (OCR)</label>
+        <input type="file" name="screenshot" id="screenshot" accept="image/*,application/pdf" hidden>
+        <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Drop or paste a screenshot">
+          <img id="dropzone-preview" class="dropzone-preview" alt="" hidden>
+          <div id="dropzone-hint" style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted);">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+              <circle cx="8.5" cy="8.5" r="1.5"></circle>
+              <polyline points="21 15 16 10 5 21"></polyline>
+            </svg>
+            <div style="font-weight: 500; color: var(--text-primary);">Drop image here or press ⌘V to paste</div>
+            <div class="subtext">Supports PNG, JPG, or PDF print export</div>
+            <button type="button" class="btn btn-secondary btn-sm" id="browse-screenshot" style="margin-top: 4px;">Choose File</button>
+          </div>
         </div>
       </div>
     </div>
-  </div>
-  <div class="actions">
-    <button class="btn" type="submit">Read &amp; prefill</button>
-    <a class="btn btn-cancel" href="{{ url_for('index') }}">× Cancel</a>
-  </div>
-</form>
 
-<p><a href="{{ url_for('add', manual=1) }}">Skip &mdash; enter details manually</a></p>
+    <div class="form-actions">
+      <a class="btn btn-secondary" href="{{ url_for('index') }}">Cancel</a>
+      <button class="btn" type="submit">Read &amp; Prefill</button>
+    </div>
+  </form>
+
+  <div style="text-align: center; margin-top: 24px;">
+    <a class="subtext" href="{{ url_for('add', manual=1) }}">Skip capture &mdash; enter details manually &rarr;</a>
+  </div>
+</div>
 
 <script>
 (function () {
-  var input = document.getElementById("screenshot");
-  var zone = document.getElementById("dropzone");
-  var hint = document.getElementById("dropzone-hint");
-  var preview = document.getElementById("dropzone-preview");
-  var browse = document.getElementById("browse-screenshot");
+  const input = document.getElementById("screenshot");
+  const zone = document.getElementById("dropzone");
+  const hint = document.getElementById("dropzone-hint");
+  const preview = document.getElementById("dropzone-preview");
+  const browse = document.getElementById("browse-screenshot");
 
   function setFile(file) {
-    if (!file || file.type.indexOf("image/") !== 0) return;
-    var dt = new DataTransfer();
+    if (!file) return;
+    const dt = new DataTransfer();
     dt.items.add(file);
     input.files = dt.files;
-    preview.src = URL.createObjectURL(file);
-    preview.hidden = false;
-    hint.firstChild.textContent = (file.name || "Screenshot ready") + " ";
+    
+    if (file.type.startsWith("image/")) {
+      preview.src = URL.createObjectURL(file);
+      preview.hidden = false;
+    }
+    hint.querySelector("div").textContent = file.name || "File ready";
     zone.classList.add("has-file");
     zone.focus();
   }
 
-  // Click focuses the zone so ⌘V works (like Cursor); Browse opens the picker.
   zone.addEventListener("click", function () { zone.focus(); });
   browse.addEventListener("click", function (e) {
     e.stopPropagation();
@@ -73,14 +92,14 @@
   zone.addEventListener("drop", function (e) {
     e.preventDefault();
     zone.classList.remove("dragover");
-    var file = e.dataTransfer.files[0];
+    const file = e.dataTransfer.files[0];
     if (file) setFile(file);
   });
 
   document.addEventListener("paste", function (e) {
-    var items = e.clipboardData && e.clipboardData.items;
+    const items = e.clipboardData && e.clipboardData.items;
     if (!items) return;
-    for (var i = 0; i < items.length; i++) {
+    for (let i = 0; i < items.length; i++) {
       if (items[i].type.indexOf("image/") !== 0) continue;
       e.preventDefault();
       setFile(new File([items[i].getAsFile()], "clipboard.png", { type: items[i].type }));

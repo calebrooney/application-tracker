@@ -26,6 +26,20 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 db.init_db()
 
 
+@app.template_filter("format_salary")
+def format_salary(val):
+    """Format numeric salary for display in salary form (e.g. $120,000/yr)."""
+    if val is None or str(val).strip() == "":
+        return "-"
+    try:
+        num = float(val)
+        if num.is_integer():
+            return f"${int(num):,}/yr"
+        return f"${num:,.2f}/yr"
+    except (ValueError, TypeError):
+        return str(val)
+
+
 @app.route("/")
 def index():
     """Show the table of all applications."""
@@ -103,12 +117,22 @@ def save():
     else:
         us_citizen_required = None
 
+    # Parse and convert compensation (salary vs hourly)
+    comp_type_raw = form.get("compensation_type", "salary")
+    comp_val_raw = form.get("comp_value", "").strip()
+    comp_type, comp_salary, comp_hourly = parse.process_compensation(
+        comp_val_raw, comp_type=comp_type_raw
+    )
+
     data = {
         "role": form.get("role") or None,
         "company": form.get("company") or None,
         "location": form.get("location") or None,
         "location_type": form.get("location_type") or None,
-        "pay": form.get("pay") or None,
+        "compensation_type": comp_type,
+        "comp_value_salary": comp_salary,
+        "comp_value_hourly": comp_hourly,
+        "pay": comp_val_raw or None,
         # Applied date defaults to today; user may override for edge cases.
         "app_date": form.get("app_date") or date.today().isoformat(),
         "due_date": form.get("due_date") or None,
@@ -128,6 +152,14 @@ def save():
     app_id = db.add_application(data)
     flash("Application added.")
     return redirect(url_for("detail", app_id=app_id))
+
+
+@app.route("/app/<int:app_id>/delete", methods=["POST"])
+def delete_app(app_id):
+    """Delete an application and redirect to the dashboard."""
+    db.delete_application(app_id)
+    flash("Application deleted.")
+    return redirect(url_for("index"))
 
 
 @app.route("/app/<int:app_id>")

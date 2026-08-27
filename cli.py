@@ -395,7 +395,48 @@ def capture():
     data["location_type"] = ask_choice(
         "Location type", db.LOCATION_TYPES, data.get("location_type")
     )
-    data["pay"] = ask_text("Pay", data.get("pay"))
+
+    # Prompt for compensation: specify salary vs hourly and amount
+    default_comp_type = "hourly" if data.get("compensation_type") is False else "salary"
+    comp_type_choice = ask_choice(
+        "Compensation type", ["salary", "hourly"], default_comp_type
+    )
+
+    default_val = None
+    if comp_type_choice == "hourly":
+        if data.get("comp_value_hourly") is not None:
+            h_val = float(data["comp_value_hourly"])
+            default_val = str(int(h_val) if h_val.is_integer() else h_val)
+        elif data.get("comp_value"):
+            default_val = str(data.get("comp_value"))
+        elif data.get("pay"):
+            default_val = str(data.get("pay"))
+        val_prompt = "Hourly rate ($/hr)"
+    else:
+        if data.get("comp_value_salary") is not None:
+            s_val = float(data["comp_value_salary"])
+            default_val = str(int(s_val) if s_val.is_integer() else s_val)
+        elif data.get("comp_value"):
+            default_val = str(data.get("comp_value"))
+        elif data.get("pay"):
+            default_val = str(data.get("pay"))
+        val_prompt = "Annual salary ($/yr)"
+
+    comp_val_str = ask_text(val_prompt, default_val)
+    if comp_val_str:
+        c_type, c_sal, c_hour = parse.process_compensation(
+            comp_val_str, comp_type=comp_type_choice
+        )
+        data["compensation_type"] = c_type
+        data["comp_value_salary"] = c_sal
+        data["comp_value_hourly"] = c_hour
+        data["pay"] = comp_val_str
+    else:
+        data["compensation_type"] = None
+        data["comp_value_salary"] = None
+        data["comp_value_hourly"] = None
+        data["pay"] = None
+
     data["department"] = ask_text("Department / team", data.get("department"))
     data["posted_date"] = ask_text(
         "Posted date (YYYY-MM-DD)", data.get("posted_date")

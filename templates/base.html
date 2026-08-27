@@ -8,16 +8,30 @@
 </head>
 <body>
   <header>
-    <a class="brand" href="{{ url_for('index') }}">Job Tracker</a>
-    <a class="btn" href="{{ url_for('add') }}">+ New Application</a>
+    <a class="brand" href="{{ url_for('index') }}">
+      <div class="brand-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+          <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+        </svg>
+      </div>
+      <span>Job Tracker</span>
+    </a>
+    <a class="btn" href="{{ url_for('add') }}">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="12" y1="5" x2="12" y2="19"></line>
+        <line x1="5" y1="12" x2="19" y2="12"></line>
+      </svg>
+      New Application
+    </a>
   </header>
 
   <main>
     {% with messages = get_flashed_messages() %}
       {% if messages %}
-        <ul class="flash">
-          {% for m in messages %}<li>{{ m }}</li>{% endfor %}
-        </ul>
+        <div class="flash">
+          {% for m in messages %}<div>{{ m }}</div>{% endfor %}
+        </div>
       {% endif %}
     {% endwith %}
 

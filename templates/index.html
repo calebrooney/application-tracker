@@ -1,39 +1,120 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Applications</h1>
+<div class="metrics-strip">
+  <div class="metric-card">
+    <div class="metric-label">Total Tracked</div>
+    <div class="metric-value">{{ applications|length }}</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-label">Applied</div>
+    <div class="metric-value">{{ applications|selectattr('status', 'equalto', 'applied')|list|length }}</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-label">Interviewing</div>
+    <div class="metric-value">{{ applications|selectattr('status', 'equalto', 'interview')|list|length }}</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-label">Offers</div>
+    <div class="metric-value">{{ applications|selectattr('status', 'equalto', 'offer')|list|length }}</div>
+  </div>
+</div>
+
+<div class="table-toolbar">
+  <h1>Applications</h1>
+  {% if applications %}
+  <div class="search-box">
+    <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="11" cy="11" r="8"></circle>
+      <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+    </svg>
+    <input type="text" id="table-search" placeholder="Filter by company, role, or location...">
+  </div>
+  {% endif %}
+</div>
 
 {% if applications %}
-<table>
-  <thead>
-    <tr>
-      <th>Role</th>
-      <th>Company</th>
-      <th>Location</th>
-      <th>Type</th>
-      <th>Pay</th>
-      <th>Applied</th>
-      <th>Due</th>
-      <th>Status</th>
-      <th></th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for a in applications %}
-    <tr>
-      <td>{{ a.role or "" }}</td>
-      <td>{{ a.company or "" }}</td>
-      <td>{{ a.location or "" }}</td>
-      <td>{{ a.location_type or "" }}</td>
-      <td>{{ a.pay or "" }}</td>
-      <td>{{ a.app_date or "" }}</td>
-      <td>{{ a.due_date or "" }}</td>
-      <td><span class="status status-{{ a.status }}">{{ a.status or "" }}</span></td>
-      <td><a href="{{ url_for('detail', app_id=a.id) }}">view</a></td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+<div class="table-container">
+  <table id="applications-table">
+    <thead>
+      <tr>
+        <th>Role</th>
+        <th>Company</th>
+        <th>Location</th>
+        <th>Type</th>
+        <th>Compensation</th>
+        <th>Applied</th>
+        <th>Due</th>
+        <th>Status</th>
+        <th style="text-align: right;">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for a in applications %}
+      <tr class="app-row" data-href="{{ url_for('detail', app_id=a.id) }}">
+        <td class="role-cell">
+          <a class="role-link" href="{{ url_for('detail', app_id=a.id) }}">{{ a.role or "Untitled Role" }}</a>
+          {% if a.energy_related %}
+            <span class="energy-tag" title="Energy related">Energy</span>
+          {% endif %}
+        </td>
+        <td class="company-cell">{{ a.company or "-" }}</td>
+        <td>{{ a.location or "-" }}</td>
+        <td>
+          {% if a.location_type %}
+            <span class="type-pill">{{ a.location_type }}</span>
+          {% else %}
+            -
+          {% endif %}
+        </td>
+        <td>{{ a.comp_value_salary|format_salary }}</td>
+        <td>{{ a.app_date or "-" }}</td>
+        <td>{{ a.due_date or "-" }}</td>
+        <td>
+          <span class="status-badge status-{{ a.status or 'applied' }}">{{ a.status or "applied" }}</span>
+        </td>
+        <td style="text-align: right; white-space: nowrap;">
+          <div class="row-actions">
+            <a class="btn btn-secondary btn-sm" href="{{ url_for('detail', app_id=a.id) }}">View</a>
+            <form method="post" action="{{ url_for('delete_app', app_id=a.id) }}" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this application?');">
+              <button class="btn btn-danger btn-sm" type="submit">Delete</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+  // Instant client-side search filter for application rows
+  document.getElementById('table-search')?.addEventListener('input', function (e) {
+    const q = e.target.value.toLowerCase();
+    const rows = document.querySelectorAll('.app-row');
+    rows.forEach(function (row) {
+      const text = row.textContent.toLowerCase();
+      row.style.display = text.includes(q) ? '' : 'none';
+    });
+  });
+
+  // Clicking an application row navigates to its granular detail page
+  document.querySelectorAll('.app-row').forEach(function (row) {
+    row.addEventListener('click', function (e) {
+      if (e.target.closest('a, button, form, input')) return;
+      const href = row.getAttribute('data-href');
+      if (href) window.location.href = href;
+    });
+  });
+</script>
 {% else %}
-<p>No applications yet. <a href="{{ url_for('add') }}">Add your first one.</a></p>
+<div class="empty-state">
+  <svg class="empty-state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+    <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+  </svg>
+  <h2>No applications logged yet</h2>
+  <p class="muted">Start tracking by pasting a job link or uploading a screenshot.</p>
+  <a class="btn" href="{{ url_for('add') }}" style="margin-top: 8px;">+ New Application</a>
+</div>
 {% endif %}
 {% endblock %}

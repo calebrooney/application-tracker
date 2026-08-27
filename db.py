@@ -13,6 +13,7 @@ load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 import psycopg2
 import psycopg2.extras
+import parse
 
 # Default to a local database named "jobtracker" if none is configured.
 DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://localhost/jobtracker")
@@ -33,25 +34,28 @@ def init_db():
         cur.execute(
             """
             CREATE TABLE IF NOT EXISTS applications (
-                id              SERIAL PRIMARY KEY,
-                role            TEXT,
-                company         TEXT,
-                location        TEXT,
-                location_type   TEXT,
-                pay             TEXT,
-                app_date        DATE,
-                due_date        DATE,
-                job_id          TEXT,
-                link            TEXT,
-                energy_related  BOOLEAN DEFAULT FALSE,
-                status          TEXT DEFAULT 'applied',
-                job_description TEXT,
-                jd_source       TEXT,
-                posted_date     DATE,
+                id                  SERIAL PRIMARY KEY,
+                role                TEXT,
+                company             TEXT,
+                location            TEXT,
+                location_type       TEXT,
+                compensation_type   BOOLEAN,
+                comp_value_salary   NUMERIC,
+                comp_value_hourly   NUMERIC,
+                pay                 TEXT,
+                app_date            DATE,
+                due_date            DATE,
+                job_id              TEXT,
+                link                TEXT,
+                energy_related      BOOLEAN DEFAULT FALSE,
+                status              TEXT DEFAULT 'applied',
+                job_description     TEXT,
+                jd_source           TEXT,
+                posted_date         DATE,
                 application_deadline DATE,
-                department      TEXT,
+                department          TEXT,
                 us_citizen_required BOOLEAN,
-                created_at      TIMESTAMPTZ DEFAULT now()
+                created_at          TIMESTAMPTZ DEFAULT now()
             )
             """
         )
@@ -61,10 +65,38 @@ def init_db():
             ("application_deadline", "DATE"),
             ("department", "TEXT"),
             ("us_citizen_required", "BOOLEAN"),
+            ("compensation_type", "BOOLEAN"),
+            ("comp_value_salary", "NUMERIC"),
+            ("comp_value_hourly", "NUMERIC"),
         ]:
             cur.execute(
                 f"ALTER TABLE applications ADD COLUMN IF NOT EXISTS {col} {typ}"
             )
+
+        # Backfill compensation fields from existing legacy pay column if needed
+        cur.execute(
+            """
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'applications' AND column_name = 'pay'
+            """
+        )
+        if cur.fetchone():
+            cur.execute(
+                """
+                SELECT id, pay FROM applications
+                WHERE pay IS NOT NULL AND comp_value_salary IS NULL
+                """
+            )
+            for row_id, pay_str in cur.fetchall():
+                c_type, c_sal, c_hour = parse.process_compensation(pay_str)
+                cur.execute(
+                    """
+                    UPDATE applications
+                    SET compensation_type = %s, comp_value_salary = %s, comp_value_hourly = %s
+                    WHERE id = %s
+                    """,
+                    (c_type, c_sal, c_hour, row_id),
+                )
 
 
 def add_application(data):
@@ -74,7 +106,8 @@ def add_application(data):
     stored as NULL. Returns the new row id.
     """
     fields = [
-        "role", "company", "location", "location_type", "pay",
+        "role", "company", "location", "location_type",
+        "compensation_type", "comp_value_salary", "comp_value_hourly", "pay",
         "app_date", "due_date", "job_id", "link", "energy_related",
         "status", "job_description", "jd_source",
         "posted_date", "application_deadline", "department",
@@ -89,6 +122,12 @@ def add_application(data):
             values,
         )
         return cur.fetchone()[0]
+
+
+def delete_application(app_id):
+    """Delete an application by id."""
+    with get_connection() as conn, conn.cursor() as cur:
+        cur.execute("DELETE FROM applications WHERE id = %s", (app_id,))
 
 
 def list_applications():

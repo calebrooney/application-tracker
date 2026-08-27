@@ -1,86 +1,155 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Review Application</h1>
-{% if data.job_description %}
-<p class="muted">Prefilled from the posting &mdash; please check each field.</p>
-{% endif %}
+<div style="max-width: 800px; margin: 0 auto;">
+  <div style="margin-bottom: 24px;">
+    <h1>Review Application</h1>
+    {% if data.job_description %}
+    <p class="muted">Fields were automatically inferred from the posting. Please review and confirm below.</p>
+    {% else %}
+    <p class="muted">Enter application details below.</p>
+    {% endif %}
+  </div>
 
-<form method="post" action="{{ url_for('save') }}">
-  <div class="stack">
-    {# Raw JD text and its source are carried over from the capture step. #}
+  <form method="post" action="{{ url_for('save') }}">
+    {# Hidden fields to carry forward raw extracted JD text and its source #}
     <input type="hidden" name="job_description" value="{{ data.job_description or '' }}">
     <input type="hidden" name="jd_source" value="{{ data.jd_source or '' }}">
 
-    <label>Role
-      <input type="text" name="role" value="{{ data.role or '' }}" required>
-    </label>
-    <label>Company
-      <input type="text" name="company" value="{{ data.company or '' }}" required>
-    </label>
-    <label>Location
-      <input type="text" name="location" value="{{ data.location or '' }}" placeholder="e.g. San Diego">
-    </label>
-    <label>Location type
-      <select name="location_type">
-        <option value="">--</option>
-        {% for t in location_types %}
-        <option value="{{ t }}" {% if data.location_type == t %}selected{% endif %}>{{ t }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <label>Pay
-      <input type="text" name="pay" value="{{ data.pay or '' }}" placeholder="e.g. 20-30">
-    </label>
-    <label>Department / team
-      <input type="text" name="department" value="{{ data.department or '' }}">
-    </label>
-    <label>Posted date
-      <input type="date" name="posted_date" value="{{ data.posted_date or '' }}">
-    </label>
-    <label>Application deadline (from JD)
-      <input type="date" name="application_deadline" value="{{ data.application_deadline or '' }}">
-    </label>
-    <label>Application date
-      <input type="date" name="app_date" value="{{ data.app_date or today }}">
-    </label>
-    <label>Due / expected response date
-      <input type="date" name="due_date" value="{{ data.due_date or '' }}">
-    </label>
-    <label>Job / req id
-      <input type="text" name="job_id" value="{{ data.job_id or '' }}">
-    </label>
-    <label>US citizen required
-      <select name="us_citizen_required">
-        <option value="">--</option>
-        <option value="yes" {% if data.us_citizen_required is sameas true %}selected{% endif %}>yes</option>
-        <option value="no" {% if data.us_citizen_required is sameas false %}selected{% endif %}>no</option>
-      </select>
-    </label>
-    <label>Link
-      <input type="url" name="link" value="{{ data.link or '' }}" placeholder="https://...">
-    </label>
-    <label>Status
-      <select name="status">
-        {% for s in statuses %}
-        <option value="{{ s }}" {% if data.status == s %}selected{% endif %}>{{ s }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <label class="checkbox">
-      <input type="checkbox" name="energy_related" {% if data.energy_related %}checked{% endif %}> Energy related
-    </label>
-  </div>
+    <!-- Section 1: Role & Organization -->
+    <div class="card">
+      <div class="card-header">
+        <h3>Role &amp; Company</h3>
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="role">Role Title *</label>
+          <input type="text" id="role" name="role" value="{{ data.role or '' }}" placeholder="e.g. Software Engineer" required>
+        </div>
+        <div class="form-group">
+          <label for="company">Company *</label>
+          <input type="text" id="company" name="company" value="{{ data.company or '' }}" placeholder="e.g. Stripe" required>
+        </div>
+        <div class="form-group full-width">
+          <label for="department">Department / Team</label>
+          <input type="text" id="department" name="department" value="{{ data.department or '' }}" placeholder="e.g. Infrastructure, Data Platform">
+        </div>
+      </div>
+    </div>
 
-  <div class="actions">
-    <button class="btn" type="submit">Save</button>
-    <a class="btn btn-cancel" href="{{ url_for('index') }}">× Cancel</a>
-  </div>
-</form>
+    <!-- Section 2: Logistics & Compensation -->
+    <div class="card">
+      <div class="card-header">
+        <h3>Location &amp; Compensation</h3>
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="location">Location</label>
+          <input type="text" id="location" name="location" value="{{ data.location or '' }}" placeholder="e.g. San Francisco, CA">
+        </div>
+        <div class="form-group">
+          <label for="location_type">Workplace Type</label>
+          <select id="location_type" name="location_type">
+            <option value="">Select type...</option>
+            {% for t in location_types %}
+            <option value="{{ t }}" {% if data.location_type == t %}selected{% endif %}>{{ t|capitalize }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="compensation_type">Compensation Type</label>
+          <select id="compensation_type" name="compensation_type">
+            <option value="salary" {% if data.compensation_type is not sameas false %}selected{% endif %}>Salary (Annual)</option>
+            <option value="hourly" {% if data.compensation_type is sameas false %}selected{% endif %}>Hourly</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="comp_value">Compensation Amount</label>
+          <input type="text" id="comp_value" name="comp_value" value="{{ data.comp_value or (data.comp_value_hourly if data.compensation_type is sameas false else data.comp_value_salary) or data.pay or '' }}" placeholder="e.g. 125000, $140k/yr, or 50/hr">
+        </div>
+      </div>
+    </div>
 
-{% if data.job_description %}
-<details>
-  <summary>Captured job description</summary>
-  <pre class="jd">{{ data.job_description }}</pre>
-</details>
-{% endif %}
+    <!-- Section 3: Key Dates & Requisition Info -->
+    <div class="card">
+      <div class="card-header">
+        <h3>Dates &amp; Requisition</h3>
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="app_date">Date Applied *</label>
+          <input type="date" id="app_date" name="app_date" value="{{ data.app_date or today }}" required>
+        </div>
+        <div class="form-group">
+          <label for="due_date">Due / Follow-up Date</label>
+          <input type="date" id="due_date" name="due_date" value="{{ data.due_date or '' }}">
+        </div>
+        <div class="form-group">
+          <label for="posted_date">Posted Date</label>
+          <input type="date" id="posted_date" name="posted_date" value="{{ data.posted_date or '' }}">
+        </div>
+        <div class="form-group">
+          <label for="application_deadline">Application Deadline</label>
+          <input type="date" id="application_deadline" name="application_deadline" value="{{ data.application_deadline or '' }}">
+        </div>
+        <div class="form-group">
+          <label for="job_id">Job / Requisition ID</label>
+          <input type="text" id="job_id" name="job_id" value="{{ data.job_id or '' }}" placeholder="e.g. REQ-9842">
+        </div>
+        <div class="form-group">
+          <label for="us_citizen_required">US Citizenship Required</label>
+          <select id="us_citizen_required" name="us_citizen_required">
+            <option value="">Unknown / Not specified</option>
+            <option value="yes" {% if data.us_citizen_required is sameas true %}selected{% endif %}>Yes (Required)</option>
+            <option value="no" {% if data.us_citizen_required is sameas false %}selected{% endif %}>No (Not required)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 4: Status & Links -->
+    <div class="card">
+      <div class="card-header">
+        <h3>Status &amp; Tracking</h3>
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="status">Application Status</label>
+          <select id="status" name="status">
+            {% for s in statuses %}
+            <option value="{{ s }}" {% if (data.status or 'applied') == s %}selected{% endif %}>{{ s|capitalize }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="link">Job Posting Link</label>
+          <input type="url" id="link" name="link" value="{{ data.link or '' }}" placeholder="https://...">
+        </div>
+        <div class="form-group full-width">
+          <label class="checkbox-group">
+            <input type="checkbox" name="energy_related" {% if data.energy_related %}checked{% endif %}>
+            <span>Energy / Climate related opportunity</span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <a class="btn btn-secondary" href="{{ url_for('index') }}">Cancel</a>
+      <button class="btn" type="submit">Save Application</button>
+    </div>
+  </form>
+
+  {% if data.job_description %}
+  <div class="card" style="margin-top: 32px;">
+    <details>
+      <summary style="font-weight: 600; cursor: pointer; color: var(--text-primary);">
+        View Captured Job Description ({{ (data.job_description|length) }} characters)
+      </summary>
+      <div style="margin-top: 14px;">
+        <div class="jd-viewer">{{ data.job_description }}</div>
+      </div>
+    </details>
+  </div>
+  {% endif %}
+</div>
 {% endblock %}

@@ -1,45 +1,138 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>{{ app.role or "Application" }}</h1>
-<p class="muted">{{ app.company or "" }}</p>
+<div style="max-width: 900px; margin: 0 auto;">
+  <div style="margin-bottom: 16px;">
+    <a class="subtext" href="{{ url_for('index') }}">&larr; Back to all applications</a>
+  </div>
 
-<dl class="details">
-  <dt>Location</dt><dd>{{ app.location or "-" }} ({{ app.location_type or "-" }})</dd>
-  <dt>Pay</dt><dd>{{ app.pay or "-" }}</dd>
-  <dt>Department</dt><dd>{{ app.department or "-" }}</dd>
-  <dt>Posted</dt><dd>{{ app.posted_date or "-" }}</dd>
-  <dt>App deadline</dt><dd>{{ app.application_deadline or "-" }}</dd>
-  <dt>Applied</dt><dd>{{ app.app_date or "-" }}</dd>
-  <dt>Due</dt><dd>{{ app.due_date or "-" }}</dd>
-  <dt>Job id</dt><dd>{{ app.job_id or "-" }}</dd>
-  <dt>US citizen required</dt>
-  <dd>{% if app.us_citizen_required is none %}-{% elif app.us_citizen_required %}yes{% else %}no{% endif %}</dd>
-  <dt>Status</dt><dd><span class="status status-{{ app.status }}">{{ app.status or "-" }}</span></dd>
-  <dt>Energy related</dt><dd>{{ "yes" if app.energy_related else "no" }}</dd>
-  <dt>Link</dt>
-  <dd>{% if app.link %}<a href="{{ app.link }}" target="_blank">{{ app.link }}</a>{% else %}-{% endif %}</dd>
-</dl>
+  <div class="detail-header">
+    <div>
+      <h1 class="detail-title">{{ app.role or "Untitled Role" }}</h1>
+      <p class="detail-subtitle">
+        {{ app.company or "Unknown Company" }}
+        {% if app.department %}&bull; {{ app.department }}{% endif %}
+      </p>
+    </div>
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <span class="status-badge status-{{ app.status or 'applied' }}">{{ app.status or "applied" }}</span>
+      {% if app.link %}
+      <a class="btn btn-secondary btn-sm" href="{{ app.link }}" target="_blank" rel="noopener noreferrer">
+        Open Posting &nearr;
+      </a>
+      {% endif %}
+      <form method="post" action="{{ url_for('delete_app', app_id=app.id) }}" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this application?');">
+        <button class="btn btn-danger btn-sm" type="submit">Delete</button>
+      </form>
+    </div>
+  </div>
 
-<h2>Job Description</h2>
-{% if app.job_description %}
-  <p class="muted">Source: {{ app.jd_source or "-" }}</p>
-  <pre class="jd">{{ app.job_description }}</pre>
-{% else %}
-  <p class="muted">No job description captured yet.</p>
-{% endif %}
+  <!-- Key application metadata -->
+  <div class="card">
+    <div class="card-header">
+      <h3>Application Details</h3>
+    </div>
+    <div class="meta-grid">
+      <div class="meta-item">
+        <span class="meta-label">Location</span>
+        <span class="meta-value">
+          {{ app.location or "Not specified" }}
+          {% if app.location_type %}({{ app.location_type|capitalize }}){% endif %}
+        </span>
+      </div>
 
-<h3>Capture job description</h3>
-<form method="post" action="{{ url_for('capture_jd', app_id=app.id) }}"
-      enctype="multipart/form-data" class="stack">
-  <label>From a link
-    <input type="url" name="link" placeholder="https://...">
-  </label>
-  <p class="muted">or</p>
-  <label>From a screenshot (OCR)
-    <input type="file" name="screenshot" accept="image/*">
-  </label>
-  <button class="btn" type="submit">Capture</button>
-</form>
+      <div class="meta-item">
+        <span class="meta-label">Compensation</span>
+        <span class="meta-value">
+          {{ app.comp_value_salary|format_salary }}
+          {% if app.compensation_type is sameas false and app.comp_value_hourly %}
+            <span class="subtext">(${{"%.2f"|format(app.comp_value_hourly)}}/hr)</span>
+          {% elif app.compensation_type is sameas true and app.comp_value_salary %}
+            <span class="subtext">(Salary)</span>
+          {% endif %}
+        </span>
+      </div>
 
-<p><a href="{{ url_for('index') }}">&larr; Back to list</a></p>
+      <div class="meta-item">
+        <span class="meta-label">Date Applied</span>
+        <span class="meta-value">{{ app.app_date or "-" }}</span>
+      </div>
+
+      <div class="meta-item">
+        <span class="meta-label">Due / Expected Response</span>
+        <span class="meta-value">{{ app.due_date or "-" }}</span>
+      </div>
+
+      <div class="meta-item">
+        <span class="meta-label">Date Posted</span>
+        <span class="meta-value">{{ app.posted_date or "-" }}</span>
+      </div>
+
+      <div class="meta-item">
+        <span class="meta-label">Application Deadline</span>
+        <span class="meta-value">{{ app.application_deadline or "-" }}</span>
+      </div>
+
+      <div class="meta-item">
+        <span class="meta-label">Job / Requisition ID</span>
+        <span class="meta-value">{{ app.job_id or "-" }}</span>
+      </div>
+
+      <div class="meta-item">
+        <span class="meta-label">US Citizen Required</span>
+        <span class="meta-value">
+          {% if app.us_citizen_required is none %}
+            Not specified
+          {% elif app.us_citizen_required %}
+            Yes
+          {% else %}
+            No
+          {% endif %}
+        </span>
+      </div>
+
+      <div class="meta-item">
+        <span class="meta-label">Energy Related</span>
+        <span class="meta-value">{{ "Yes" if app.energy_related else "No" }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Job Description viewer -->
+  <div class="card">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+      <h3>Job Description</h3>
+      {% if app.jd_source %}
+      <span class="subtext">Source: {{ app.jd_source }}</span>
+      {% endif %}
+    </div>
+
+    {% if app.job_description %}
+      <div class="jd-viewer">{{ app.job_description }}</div>
+    {% else %}
+      <p class="muted" style="margin-bottom: 0;">No job description captured yet.</p>
+    {% endif %}
+  </div>
+
+  <!-- Re-capture Job Description widget -->
+  <div class="card">
+    <div class="card-header">
+      <h3>{% if app.job_description %}Update{% else %}Capture{% endif %} Job Description</h3>
+    </div>
+    <form method="post" action="{{ url_for('capture_jd', app_id=app.id) }}" enctype="multipart/form-data">
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="jd-link">From Link</label>
+          <input type="url" id="jd-link" name="link" placeholder="https://...">
+        </div>
+        <div class="form-group">
+          <label for="jd-screenshot">From Screenshot or PDF (OCR)</label>
+          <input type="file" id="jd-screenshot" name="screenshot" accept="image/*,application/pdf">
+        </div>
+      </div>
+      <div class="form-actions" style="margin-top: 16px;">
+        <button class="btn btn-secondary" type="submit">Extract &amp; Save JD</button>
+      </div>
+    </form>
+  </div>
+</div>
 {% endblock %}

@@ -25,6 +25,10 @@ EMPTY_FIELDS = {
     "company": None,
     "location": None,
     "location_type": None,
+    "compensation_type": None,
+    "comp_value_salary": None,
+    "comp_value_hourly": None,
+    "comp_value": None,
     "pay": None,
     "job_id": None,
     "posted_date": None,
@@ -130,6 +134,74 @@ def _pay(text):
     return m.group(0).strip() if m else None
 
 
+def parse_compensation_val(val):
+    """Extract a numeric compensation figure from a string (handling ranges and k suffix)."""
+    if val is None:
+        return None
+    if isinstance(val, (int, float)):
+        return float(val)
+    s = str(val).strip()
+    if not s:
+        return None
+    # Find all numeric numbers (with optional k/K or decimals)
+    matches = re.findall(r"(\d+(?:,\d+)*(?:\.\d+)?)\s*([kK])?", s)
+    if not matches:
+        return None
+    nums = []
+    for num_str, k_suffix in matches:
+        clean_num = float(num_str.replace(",", ""))
+        if k_suffix:
+            clean_num *= 1000
+        nums.append(clean_num)
+    if not nums:
+        return None
+    # If range, use average of the values
+    return round(sum(nums) / len(nums), 2)
+
+
+def process_compensation(raw_val, comp_type=None):
+    """Convert raw input into boolean compensation_type, salary value, and hourly value.
+
+    compensation_type: True = salary, False = hourly.
+    comp_value_salary: heuristic conversion (hourly * 2080) if input is hourly.
+    comp_value_hourly: numeric rate if hourly, None if salary.
+    """
+    if raw_val is None or str(raw_val).strip() == "":
+        return None, None, None
+
+    # Parse numeric amount
+    num = parse_compensation_val(raw_val)
+    if num is None:
+        return None, None, None
+
+    # Determine type if not explicitly specified
+    raw_str = str(raw_val).lower()
+    is_salary = True
+    if comp_type is not None:
+        if isinstance(comp_type, bool):
+            is_salary = comp_type
+        elif str(comp_type).lower() in ("hourly", "hour", "hr", "false", "0"):
+            is_salary = False
+        elif str(comp_type).lower() in ("salary", "annual", "year", "yr", "true", "1"):
+            is_salary = True
+    else:
+        # Heuristic detection from string keywords or magnitude
+        if re.search(r"\b(hour|hr|hourly|/hr)\b", raw_str):
+            is_salary = False
+        elif re.search(r"\b(year|yr|annually|annual|/yr|k)\b", raw_str):
+            is_salary = True
+        elif num < 250:
+            # Low numbers without k suffix are typically hourly wages
+            is_salary = False
+
+    if is_salary:
+        return True, round(num, 2), None
+    else:
+        # Standard full-time heuristic: 40 hrs/wk * 52 wks = 2080 hrs/yr
+        salary_val = round(num * 2080, 2)
+        return False, salary_val, round(num, 2)
+
+
 def _city_st(text):
     """Find a City, ST location."""
     m = re.search(r"([A-Z][A-Za-z.\- ]+,\s*[A-Z]{2})\b", text)
@@ -229,9 +301,23 @@ def _us_citizen_required(text):
 
 def _shared_from_text(text):
     """Fill fields that are shared across all formats."""
+    raw_pay = _pay(text)
+    comp_type, val_salary, val_hourly = process_compensation(raw_pay)
+    comp_val = None
+    if comp_type is False and val_hourly is not None:
+        comp_val = str(val_hourly)
+    elif comp_type is True and val_salary is not None:
+        comp_val = str(int(val_salary) if val_salary.is_integer() else val_salary)
+    elif raw_pay:
+        comp_val = raw_pay
+
     return {
         "location_type": _location_type(text),
-        "pay": _pay(text),
+        "pay": raw_pay,
+        "compensation_type": comp_type,
+        "comp_value_salary": val_salary,
+        "comp_value_hourly": val_hourly,
+        "comp_value": comp_val,
         "location": _city_st(text),
         "posted_date": _posted_date(text),
         "application_deadline": _application_deadline(text),
